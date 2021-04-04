@@ -35,6 +35,17 @@ class PruningExperiment(TrainingExperiment):
         self.path = path
         self.save_freq = save_freq
 
+    def pruning_masks(self, strategy, compression):
+        constructor = getattr(strategies, strategy)
+        x, y = next(iter(self.train_dl))
+        self.pruning = constructor(self.model, x, y, compression=compression)
+
+        return self.pruning.model_masks()
+
+    def apply_pruning_masks(self, masks):
+        self.pruning.apply(masks=masks)
+        printc("Masked model", color='GREEN')
+
     def apply_pruning(self, strategy, compression):
         constructor = getattr(strategies, strategy)
         x, y = next(iter(self.train_dl))
