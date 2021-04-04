@@ -23,9 +23,11 @@ class PruningExperiment(TrainingExperiment):
                  resume=None,
                  resume_optim=False,
                  save_freq=10,
-                 run_on_device=True):
+                 run_on_device=True,
+                 warmup_iterations=0,
+                 k_iteration_save=-1):
 
-        super(PruningExperiment, self).__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq, run_on_device)
+        super(PruningExperiment, self).__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq, run_on_device, warmup_iterations, k_iteration_save)
         self.add_params(strategy=strategy, compression=compression)
 
         self.apply_pruning(strategy, compression)
@@ -48,8 +50,9 @@ class PruningExperiment(TrainingExperiment):
 
         self.save_metrics()
 
-        if self.pruning.compression > 1:
-            self.run_epochs()
+        # TODO check
+        #if self.pruning.compression > 1:
+        self.run_epochs()
 
     def save_metrics(self):
         self.metrics = self.pruning_metrics()

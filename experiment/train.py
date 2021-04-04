@@ -9,6 +9,7 @@ from torch.backends import cudnn
 from tqdm import tqdm
 import json
 import pytorch_warmup as warmup
+from copy import deepcopy
 
 from .base import Experiment
 from .. import datasets
@@ -43,7 +44,8 @@ class TrainingExperiment(Experiment):
                  resume_optim=False,
                  save_freq=10,
                  run_on_device=True,
-                 warmup_iterations=0):
+                 warmup_iterations=0,
+                 k_iteration_save=-1):
 
         # Default children kwargs
         super(TrainingExperiment, self).__init__(seed)
@@ -53,6 +55,10 @@ class TrainingExperiment(Experiment):
         params = locals()
         params['dl_kwargs'] = dl_kwargs
         params['train_kwargs'] = train_kwargs
+
+        self.warmup_iterations = warmup_iterations
+        self.k_iteration_save = k_iteration_save
+        self.k_iteration_params = None
         self.add_params(**params)
         # Save params
 
@@ -65,7 +71,6 @@ class TrainingExperiment(Experiment):
         self.path = path
         self.save_freq = save_freq
         self.run_on_device = run_on_device
-        self.warmup_iterations = warmup_iterations
 
     def run(self):
         self.freeze()
@@ -138,7 +143,8 @@ class TrainingExperiment(Experiment):
 
     def to_device(self):
         # Torch CUDA config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda'
+           if torch.cuda.is_available() and self.run_on_device else 'cpu')
         if not torch.cuda.is_available() or not self.run_on_device:
             printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
         self.model.to(self.device)
@@ -197,6 +203,10 @@ class TrainingExperiment(Experiment):
                 yhat = self.model(x)
                 loss = self.loss_func(yhat, y)
                 if train:
+                    if self.k_iteration_save <= epoch * len(dl) + i \
+                            and self.k_iteration_save != -1:
+                        self.k_iteration_params = deepcopy(self.model.state_dict())
+
                     loss.backward()
 
                     self.optim.step()
