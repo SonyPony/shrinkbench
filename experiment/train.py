@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.backends import cudnn
 from tqdm import tqdm
 import json
+import pytorch_warmup as warmup
 
 from .base import Experiment
 from .. import datasets
@@ -40,8 +41,9 @@ class TrainingExperiment(Experiment):
                  pretrained=False,
                  resume=None,
                  resume_optim=False,
-                 save_freq=10):
+                 save_freq=10,
                  run_on_device=True,
+                 warmup_iterations=0):
 
         # Default children kwargs
         super(TrainingExperiment, self).__init__(seed)
@@ -63,6 +65,7 @@ class TrainingExperiment(Experiment):
         self.path = path
         self.save_freq = save_freq
         self.run_on_device = run_on_device
+        self.warmup_iterations = warmup_iterations
 
     def run(self):
         self.freeze()
@@ -114,6 +117,16 @@ class TrainingExperiment(Experiment):
             optim = constructor(self.model.parameters(), **optim_kwargs)
 
         self.optim = optim
+        if self.warmup_iterations:
+            self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer=optim,
+                T_max=epochs * self.train_dl.batch_size,
+            )
+
+            self.warmup_scheduler = warmup.LinearWarmup(
+                optimizer=optim,
+                warmup_period=self.warmup_iterations
+            )
 
         if resume_optim:
             assert hasattr(self, "resume"), "Resume must be given for resume_optim"
@@ -187,6 +200,10 @@ class TrainingExperiment(Experiment):
                     loss.backward()
 
                     self.optim.step()
+
+                    if self.warmup_iterations:
+                        self.lr_scheduler.step(self.lr_scheduler.last_epoch + 1)
+                        self.warmup_scheduler.dampen()
                     self.optim.zero_grad()
 
                 c1, c5 = correct(yhat, y, (1, 5))
