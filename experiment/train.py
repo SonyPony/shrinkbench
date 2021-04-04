@@ -41,6 +41,7 @@ class TrainingExperiment(Experiment):
                  resume=None,
                  resume_optim=False,
                  save_freq=10):
+                 run_on_device=True,
 
         # Default children kwargs
         super(TrainingExperiment, self).__init__(seed)
@@ -61,6 +62,7 @@ class TrainingExperiment(Experiment):
 
         self.path = path
         self.save_freq = save_freq
+        self.run_on_device = run_on_device
 
     def run(self):
         self.freeze()
@@ -124,7 +126,7 @@ class TrainingExperiment(Experiment):
     def to_device(self):
         # Torch CUDA config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        if not torch.cuda.is_available():
+        if not torch.cuda.is_available() or not self.run_on_device:
             printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
         self.model.to(self.device)
         cudnn.benchmark = True   # For fast training.
