@@ -60,6 +60,7 @@ class LotteryTicketExperiment(PruningExperiment):
     def run(self):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
+        printc("Current p% level: 1", color="YELLOW")
         self.to_device()
         self.build_logging(self.train_metrics, self.path)
 
@@ -72,6 +73,8 @@ class LotteryTicketExperiment(PruningExperiment):
         self.run_epochs()
 
         for i in range(pruning_iterations):
+            print("\n\n")
+            printc("Current p% level: {}".format((1 - self.pruning_rate) ** (i + 1)), color="YELLOW")
             target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
 
             # prune
