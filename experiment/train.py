@@ -123,9 +123,9 @@ class TrainingExperiment(Experiment):
 
         self.optim = optim
         if self.warmup_iterations:
-            self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer=optim,
-                T_max=epochs * self.train_dl.batch_size,
+                lr_lambda=lambda _: optim_kwargs.get("lr")
             )
 
             self.warmup_scheduler = warmup.LinearWarmup(
