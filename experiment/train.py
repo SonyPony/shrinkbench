@@ -203,7 +203,7 @@ class TrainingExperiment(Experiment):
                 yhat = self.model(x)
                 loss = self.loss_func(yhat, y)
                 if train:
-                    if self.k_iteration_save <= epoch * len(dl) + i \
+                    if self.k_iteration_save == epoch * len(dl) + i - 1 \
                             and self.k_iteration_save != -1:
                         self.k_iteration_params = deepcopy(self.model.state_dict())
 
