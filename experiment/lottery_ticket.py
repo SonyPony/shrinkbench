@@ -57,20 +57,29 @@ class LotteryTicketExperiment(PruningExperiment):
         self.add_params(rewinding_it=rewinding_it)
         self.add_params(compression=compression)
 
+    def init_acc(self):
+        metrics = self.pruning_metrics()
+
+        return {v: metrics.get(v) for v in ("val_acc1", "val_acc5")}
+
     def run(self):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
-        printc("Current p% level: 1", color="YELLOW")
         self.to_device()
         self.build_logging(self.train_metrics, self.path)
 
-        self.save_metrics()
 
         target_pruning_ratio_inv = 1 / self.compression
         pruning_iterations = round(log(target_pruning_ratio_inv, 1 - self.pruning_rate) - 1)
 
         # train model without pruning
+        printc("Current p% level: 1", color="YELLOW")
+        # init val acc
+        metrics = self.init_acc()
+        printc("Val Acc-1: {}, Val Acc-5: {}".format(metrics.get("val_acc1"), metrics.get("val_acc5")), color="YELLOW")
+
         self.run_epochs()
+        self.save_metrics()
 
         for i in range(pruning_iterations):
             print("\n\n")
@@ -78,14 +87,18 @@ class LotteryTicketExperiment(PruningExperiment):
             target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
 
             # prune
-            # TODO fix: restoring weights ignors mask??? Yes
             pruning_masks = self.pruning_masks(self.strategy, compression=target_compression_level)
             self.model.load_state_dict(self.k_iteration_params)
             self.apply_pruning_masks(masks=pruning_masks)
 
+            # init val acc
+            metrics = self.init_acc()
+
+            printc("Val Acc-1: {}, Val Acc-5: {}".format(metrics.get("val_acc1"), metrics.get("val_acc5")), color="YELLOW")
+
             self.freeze()
             self.to_device()
             self.build_logging(self.train_metrics, self.path)
-            self.save_metrics()
 
             self.run_epochs()
+            self.save_metrics()
