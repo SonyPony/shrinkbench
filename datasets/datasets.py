@@ -4,13 +4,15 @@ import os
 from torchvision import transforms, datasets
 
 from . import places365
+from . import tinyimagenet
 
 _constructors = {
     'MNIST': datasets.MNIST,
     'CIFAR10': datasets.CIFAR10,
     'CIFAR100': datasets.CIFAR100,
     'ImageNet': datasets.ImageNet,
-    'Places365': places365.Places365
+    'Places365': places365.Places365,
+    'TinyImageNet': tinyimagenet.TinyImageNet
 }
 
 
@@ -136,6 +138,18 @@ def ImageNet(train=True, path=None):
         preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('ImageNet', train, normalize, preproc, path)
     dataset.shape = (3, 224, 224)
+    return dataset
+
+
+def TinyImageNet(train=True, path=None):
+    mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+    normalize = transforms.Normalize(mean=mean, std=std)
+    if train:
+        preproc = [transforms.RandomHorizontalFlip()]
+    else:
+        preproc = []
+    dataset = dataset_builder('TinyImageNet', train, normalize, preproc, path)
+    dataset.shape = (3, 64, 64)
     return dataset
 
 
