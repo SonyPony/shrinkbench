@@ -10,6 +10,8 @@ from tqdm import tqdm
 import json
 import pytorch_warmup as warmup
 from copy import deepcopy
+from math import floor
+from enum import Enum
 
 from .base import Experiment
 from .. import datasets
@@ -18,6 +20,11 @@ from ..metrics import correct
 from ..models.head import mark_classifier
 from ..util import printc, OnlineStats
 
+
+class Run(Enum):
+    TRAIN = 0
+    VAL = 1
+    TEST = 2
 
 class TrainingExperiment(Experiment):
 
@@ -82,9 +89,24 @@ class TrainingExperiment(Experiment):
     def build_dataloader(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
         self.train_dataset = constructor(train=True)
-        self.val_dataset = constructor(train=False)
+        self.val_dataset = list()
+
+        if split_ratio := dl_kwargs.get("split_ratio", None):
+            dl_kwargs.pop("split_ratio", None)
+            data_size = len(self.train_dataset)
+            train_data_size = floor(split_ratio * data_size)
+
+            self.train_dataset, self.val_dataset = \
+                torch.utils.data.random_split(
+                    self.train_dataset,
+                    lengths=(train_data_size, data_size - train_data_size),
+                    generator=torch.Generator().manual_seed(42)
+                )
+
+        self.test_dataset = constructor(train=False)
         self.train_dl = DataLoader(self.train_dataset, shuffle=True, **dl_kwargs)
         self.val_dl = DataLoader(self.val_dataset, shuffle=False, **dl_kwargs)
+        self.test_dl = DataLoader(self.test_dataset, shuffle=False, **dl_kwargs)
 
     def build_model(self, model, pretrained=True, resume=None):
         if isinstance(model, str):
@@ -166,7 +188,7 @@ class TrainingExperiment(Experiment):
             for epoch in range(self.epochs):
                 printc(f"Start epoch {epoch}", color='YELLOW')
                 self.train(epoch)
-                self.eval(epoch)
+                self.validate(epoch)
                 # Checkpoint epochs
                 # TODO Model checkpointing based on best val loss/acc
                 if epoch % self.save_freq == 0:
@@ -180,15 +202,20 @@ class TrainingExperiment(Experiment):
         except KeyboardInterrupt:
             printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
 
-    def run_epoch(self, train, epoch=0):
-        if train:
+    def run_epoch(self, train: Run, epoch:int=0):
+        if train == Run.TRAIN:
             self.model.train()
             prefix = 'train'
             dl = self.train_dl
-        else:
+        elif train == Run.VAL:
             prefix = 'val'
             dl = self.val_dl
             self.model.eval()
+        else:
+            prefix = "test"
+            dl = self.test_dl
+            self.model.eval()
+        train = train == Run.TRAIN
 
         total_loss = OnlineStats()
         acc1 = OnlineStats()
@@ -232,10 +259,13 @@ class TrainingExperiment(Experiment):
         return total_loss.mean, acc1.mean, acc5.mean
 
     def train(self, epoch=0):
-        return self.run_epoch(True, epoch)
+        return self.run_epoch(Run.TRAIN, epoch)
 
-    def eval(self, epoch=0):
-        return self.run_epoch(False, epoch)
+    def validate(self, epoch=0):
+        return self.run_epoch(Run.VAL, epoch)
+
+    def eval(self, epoch=-1):
+        return self.run_epoch(Run.TEST, epoch)
 
     @property
     def train_metrics(self):

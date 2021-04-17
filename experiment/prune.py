@@ -1,6 +1,6 @@
 import json
 
-from .train import TrainingExperiment
+from .train import TrainingExperiment, Run
 
 from .. import strategies
 from ..metrics import model_size, flops
@@ -84,7 +84,7 @@ class PruningExperiment(TrainingExperiment):
         metrics['size_nz'] = size_nz
         metrics['compression_ratio'] = size / size_nz
 
-        x, y = next(iter(self.val_dl))
+        x, y = next(iter(self.test_dl))
         x, y = x.to(self.device), y.to(self.device)
 
         # FLOPS
@@ -94,11 +94,11 @@ class PruningExperiment(TrainingExperiment):
         metrics['theoretical_speedup'] = ops / ops_nz
 
         # Accuracy
-        loss, acc1, acc5 = self.run_epoch(False, -1)
         self.log_epoch(-1)
+        loss, acc1, acc5 = self.run_epoch(Run.TEST, -1)
 
         metrics['loss'] = loss
-        metrics['val_acc1'] = acc1
-        metrics['val_acc5'] = acc5
+        metrics['test_acc1'] = acc1
+        metrics['test_acc5'] = acc5
 
         return metrics
