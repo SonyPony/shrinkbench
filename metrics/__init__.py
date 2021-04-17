@@ -11,7 +11,7 @@ def nonzero(tensor):
     Returns:
         int -- Number of nonzero elements
     """
-    return np.sum(tensor != 0.0)
+    return np.sum(tensor != 0.)
 
 
 # https://pytorch.org/docs/stable/tensor_attributes.html
