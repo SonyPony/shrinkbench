@@ -52,7 +52,8 @@ class TrainingExperiment(Experiment):
                  save_freq=10,
                  run_on_device=True,
                  warmup_iterations=0,
-                 k_iteration_save=-1):
+                 k_iteration_save=-1,
+                 logging=True):
 
         # Default children kwargs
         super(TrainingExperiment, self).__init__(seed)
@@ -63,6 +64,7 @@ class TrainingExperiment(Experiment):
         params['dl_kwargs'] = dl_kwargs
         params['train_kwargs'] = train_kwargs
 
+        self.logging = logging
         self.warmup_iterations = warmup_iterations
         self.k_iteration_save = k_iteration_save
         self.k_iteration_params = None
@@ -83,11 +85,13 @@ class TrainingExperiment(Experiment):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
         self.to_device()
-        self.build_logging(self.train_metrics, self.path)
+        if self.logging:
+            self.build_logging(self.train_metrics, self.path)
         self.run_epochs()
 
     def build_dataloader(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
+
         self.train_dataset = constructor(train=True)
         self.val_dataset = list()
 
@@ -173,6 +177,8 @@ class TrainingExperiment(Experiment):
         cudnn.benchmark = True   # For fast training.
 
     def checkpoint(self):
+        if not self.logging:
+            return
         checkpoint_path = self.path / 'checkpoints'
         checkpoint_path.mkdir(exist_ok=True, parents=True)
         epoch = self.log_epoch_n
@@ -195,8 +201,9 @@ class TrainingExperiment(Experiment):
                     self.checkpoint()
                 # TODO Early stopping
                 # TODO ReduceLR on plateau?
-                self.log(timestamp=time.time()-since)
-                self.log_epoch(epoch)
+                if self.logging:
+                    self.log(timestamp=time.time()-since)
+                    self.log_epoch(epoch)
 
 
         except KeyboardInterrupt:
@@ -250,11 +257,12 @@ class TrainingExperiment(Experiment):
 
                 epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
 
-        self.log(**{
-            f'{prefix}_loss': total_loss.mean,
-            f'{prefix}_acc1': acc1.mean,
-            f'{prefix}_acc5': acc5.mean,
-        })
+        if self.logging:
+            self.log(**{
+                f'{prefix}_loss': total_loss.mean,
+                f'{prefix}_acc1': acc1.mean,
+                f'{prefix}_acc5': acc5.mean,
+            })
 
         return total_loss.mean, acc1.mean, acc5.mean
 

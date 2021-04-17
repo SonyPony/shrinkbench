@@ -25,9 +25,10 @@ class PruningExperiment(TrainingExperiment):
                  save_freq=10,
                  run_on_device=True,
                  warmup_iterations=0,
-                 k_iteration_save=-1):
+                 k_iteration_save=-1,
+                 logging=True):
 
-        super(PruningExperiment, self).__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq, run_on_device, warmup_iterations, k_iteration_save)
+        super(PruningExperiment, self).__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq, run_on_device, warmup_iterations, k_iteration_save, logging)
         self.add_params(strategy=strategy, compression=compression)
 
         self.apply_pruning(strategy, compression)
@@ -94,8 +95,9 @@ class PruningExperiment(TrainingExperiment):
         metrics['theoretical_speedup'] = ops / ops_nz
 
         # Accuracy
-        self.log_epoch(-1)
         loss, acc1, acc5 = self.run_epoch(Run.TEST, -1)
+        if self.logging:
+            self.log_epoch(-1)
 
         metrics['loss'] = loss
         metrics['test_acc1'] = acc1

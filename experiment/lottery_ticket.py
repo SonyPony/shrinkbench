@@ -26,7 +26,8 @@ class LotteryTicketExperiment(PruningExperiment):
                  run_on_device=True,
                  warmup_iterations=0,
                  rewinding_it=0,
-                 pruning_rate=0.15):
+                 pruning_rate=0.15,
+                 logging=True):
 
         super().__init__(
             dataset=dataset,
@@ -44,7 +45,8 @@ class LotteryTicketExperiment(PruningExperiment):
             save_freq=save_freq,
             run_on_device=run_on_device,
             warmup_iterations=warmup_iterations,
-            k_iteration_save=rewinding_it
+            k_iteration_save=rewinding_it,
+            logging=logging
         )
 
         # TODO check
