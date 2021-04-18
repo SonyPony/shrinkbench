@@ -1,6 +1,8 @@
 import json
 import wandb
+import itertools
 
+from operator import itemgetter
 from typing import Dict
 from math import log
 from .prune import PruningExperiment
@@ -55,6 +57,8 @@ class LotteryTicketExperiment(PruningExperiment):
         self.rewinding_it = rewinding_it
         self.pruning_rate = pruning_rate
         self.strategy = strategy
+        self.train_metrics_list = list()
+        self.pruning_levels_list = list()
 
         self.add_params(pruning_rate=pruning_rate)
         self.add_params(rewinding_it=rewinding_it)
@@ -65,6 +69,20 @@ class LotteryTicketExperiment(PruningExperiment):
 
     def log(self, **kwargs):
         wandb.log(kwargs)
+
+    def log_end_summary(self):
+        train_accs = list(map(itemgetter(1), self.train_metrics_list))
+        val_accs = list(map(itemgetter(3), self.train_metrics_list))
+        pruning_keys = itertools.product(self.pruning_levels_list, ["train", "val"])
+
+        wandb.log({"pruning_training_course": wandb.plot.line_series(
+            xs=[e * len(self.train_dl)
+                for e in range(self.params["train_kwargs"]["epochs"])],
+            ys=list(itertools.chain(*zip(train_accs, val_accs))), # interlace runs - [tr, val, tr, val, ...]
+            xname="Iteration",
+            title="Accuracy During Training",
+            keys=["p% = {:.2f} - {}".format(*x) for x in pruning_keys]
+        )})
 
     def pruning_iteration_run(self, target_compression_level: float):
         if target_compression_level != 1.:
@@ -83,7 +101,8 @@ class LotteryTicketExperiment(PruningExperiment):
             init_metrics.get("test_acc1"), init_metrics.get("test_acc5")), color="YELLOW")
 
         # train
-        self.run_epochs()
+        self.train_metrics_list.append(self.run_epochs())
+        self.pruning_levels_list.append(1 / target_compression_level)
 
         metrics = self.pruning_metrics()
         printc(json.dumps(metrics, indent=4), color='GRASS')
@@ -100,9 +119,9 @@ class LotteryTicketExperiment(PruningExperiment):
         )
 
     def run(self):
-        printc(f"Running {repr(self)}", color='YELLOW')
-
         self.init_logger(**self.summary_params())
+
+        printc(f"Running {repr(self)}", color='YELLOW')
 
         target_pruning_ratio_inv = 1 / self.compression
         pruning_iterations = round(log(target_pruning_ratio_inv, 1 - self.pruning_rate) - 1)
@@ -112,6 +131,7 @@ class LotteryTicketExperiment(PruningExperiment):
         for i in range(pruning_iterations):
             target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
             self.pruning_iteration_run(target_compression_level=target_compression_level)
+        self.log_end_summary()
 
     def summary_params(self) -> Dict:
         return {

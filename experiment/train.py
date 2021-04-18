@@ -12,6 +12,7 @@ import pytorch_warmup as warmup
 from copy import deepcopy
 from math import floor
 from enum import Enum
+from operator import itemgetter
 
 from .base import Experiment
 from .. import datasets
@@ -188,13 +189,14 @@ class TrainingExperiment(Experiment):
         }, checkpoint_path / f'checkpoint-{epoch}.pt')
 
     def run_epochs(self):
+        train_metrics, val_metrics = [], []
 
         since = time.time()
         try:
             for epoch in range(self.epochs):
                 printc(f"Start epoch {epoch}", color='YELLOW')
-                self.train(epoch)
-                self.validate(epoch)
+                train_metrics.append(self.train(epoch))
+                val_metrics.append(self.validate(epoch))
                 # Checkpoint epochs
                 # TODO Model checkpointing based on best val loss/acc
                 if epoch % self.save_freq == 0:
@@ -204,6 +206,11 @@ class TrainingExperiment(Experiment):
                 if self.logging:
                     self.log(timestamp=time.time()-since)
                     self.log_epoch(epoch)
+            # train loss, train acc1, val loss, val acc1
+            return list(map(itemgetter(0), train_metrics)), \
+                   list(map(itemgetter(1), train_metrics)), \
+                   list(map(itemgetter(0), val_metrics)), \
+                   list(map(itemgetter(1), val_metrics))
 
 
         except KeyboardInterrupt:
