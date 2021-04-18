@@ -4,6 +4,8 @@ import torchvision.datasets as datasets
 
 
 class TinyImageNet(datasets.ImageFolder):
+    IMG_SIZE = 56
+
     def __init__(self, root: str, train=True, **kwargs):
         root = os.path.join(root, "train" if train else "test")
         super().__init__(

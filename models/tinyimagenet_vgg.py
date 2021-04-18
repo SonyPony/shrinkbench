@@ -14,7 +14,7 @@ class ConvRelu(nn.Module):
         x = self.conv(x)
         return self.relu(x)
 
-class SeqConvReluMP(nn.Module):
+class SeqConvRelu(nn.Module):
     def __init__(self, in_channels, out_channels, layers_count):
         super().__init__()
 
@@ -23,7 +23,18 @@ class SeqConvReluMP(nn.Module):
             *[
                 ConvRelu(in_channels=out_channels, out_channels=out_channels)
                 for _ in range(layers_count - 1)
-            ],
+            ]
+        )
+
+    def forward(self, x):
+        return self.features(x)
+
+class SeqConvReluMP(nn.Module):
+    def __init__(self, in_channels, out_channels, layers_count):
+        super().__init__()
+
+        self.features = nn.Sequential(
+            SeqConvRelu(in_channels, out_channels, layers_count),
             nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)
         )
 
@@ -41,21 +52,33 @@ class TinyImageNetVGG16(nn.Module):
         self.features = nn.Sequential(
             SeqConvReluMP(in_channels=3, out_channels=ngx, layers_count=2),
             SeqConvReluMP(in_channels=ngx, out_channels=ngx * 2, layers_count=2),
-            SeqConvReluMP(in_channels=ngx * 2, out_channels=ngx * 4, layers_count=4),
-            SeqConvReluMP(in_channels=ngx * 4, out_channels=ngx * 8, layers_count=4),
+            SeqConvReluMP(in_channels=ngx * 2, out_channels=ngx * 4, layers_count=3),
+            SeqConvRelu(in_channels=ngx * 4, out_channels=ngx * 8, layers_count=3),
         )
 
         self.linear = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(in_features=4 * 4 * ngx * 8, out_features=4096),
+            nn.Linear(in_features=7 * 7 * ngx * 8, out_features=4096),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
-            nn.Linear(in_features=4096, out_features=4096),
-            nn.ReLU(inplace=True)
-
+            nn.Linear(in_features=4096, out_features=2048),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
         )
-        self.fc3 = nn.Linear(in_features=4096, out_features=TinyImageNetVGG16.CLASS_COUNT)
+        self.fc3 = nn.Linear(in_features=2048, out_features=TinyImageNetVGG16.CLASS_COUNT)
         self.fc3.is_classifier = True
+
+        # initialize weights
+        self.init_weights()
+
+    def init_weights(self):
+        def init_layer_weights(l: nn.Module):
+            if type(l) in (nn.Linear, nn.Conv2d):
+                torch.nn.init.kaiming_uniform_(l.weight, mode="fan_in", nonlinearity='relu')
+                l.bias.data.fill_(0.)
+
+        self.features.apply(init_layer_weights)
+        self.linear.apply(init_layer_weights)
+        init_layer_weights(self.fc3)
 
     def forward(self, x):
         x = self.features(x)

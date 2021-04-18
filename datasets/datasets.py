@@ -142,14 +142,25 @@ def ImageNet(train=True, path=None):
 
 
 def TinyImageNet(train=True, path=None):
-    mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-    normalize = transforms.Normalize(mean=mean, std=std)
+    img_size = tinyimagenet.TinyImageNet.IMG_SIZE
+    normalize = transforms.Lambda(lambda x: x * 2. - 1.)
+    preproc = [transforms.CenterCrop(img_size)]
+
     if train:
-        preproc = [transforms.RandomHorizontalFlip()]
-    else:
-        preproc = []
-    dataset = dataset_builder('TinyImageNet', train, normalize, preproc, path)
-    dataset.shape = (3, 64, 64)
+        preproc = [
+            transforms.RandomCrop(img_size),
+            transforms.RandomHorizontalFlip()
+        ]
+
+    dataset = dataset_builder(
+        'TinyImageNet',
+        train,
+        normalize=normalize,
+        preproc=preproc,
+        path=path
+    )
+
+    dataset.shape = (3, img_size, img_size)
     return dataset
 
 
