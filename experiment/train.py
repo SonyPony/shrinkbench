@@ -133,6 +133,9 @@ class TrainingExperiment(Experiment):
             previous = torch.load(self.resume)
             self.model.load_state_dict(previous['model_state_dict'])
 
+    def reset_lr(self):
+        self.current_lr = self.lr
+
     def build_train(self, optim, epochs, resume_optim=False, **optim_kwargs):
         default_optim_kwargs = {
             'SGD': {'momentum': 0.9, 'nesterov': True, 'lr': 1e-3},
@@ -140,6 +143,8 @@ class TrainingExperiment(Experiment):
         }
 
         self.epochs = epochs
+        self.lr = optim_kwargs.get("lr")
+        self.current_lr = self.lr
 
         # Optim
         if isinstance(optim, str):
@@ -152,7 +157,7 @@ class TrainingExperiment(Experiment):
         if self.warmup_iterations:
             self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
                 optimizer=optim,
-                lr_lambda=lambda _: optim_kwargs.get("lr")
+                lr_lambda=lambda _: self.current_lr
             )
 
             self.warmup_scheduler = warmup.LinearWarmup(
@@ -188,8 +193,17 @@ class TrainingExperiment(Experiment):
             'optim_state_dict': self.optim.state_dict()
         }, checkpoint_path / f'checkpoint-{epoch}.pt')
 
+    # returns whether lr was decreased
+    def decrease_lr(self, epoch: int, train_metrics, val_metrics) -> bool:
+        return False
+
+    # returns whether early stop criterion was met
+    def early_stop(self, epoch, train_metrics, val_metrics, lr_decreased) -> bool:
+        return False
+
     def run_epochs(self):
-        train_metrics, val_metrics = [], []
+        train_metrics, val_metrics, lr_list = [], [], []
+        self.reset_lr()
 
         since = time.time()
         try:
@@ -197,21 +211,29 @@ class TrainingExperiment(Experiment):
                 printc(f"Start epoch {epoch}", color='YELLOW')
                 train_metrics.append(self.train(epoch))
                 val_metrics.append(self.validate(epoch))
+
                 # Checkpoint epochs
                 # TODO Model checkpointing based on best val loss/acc
                 if epoch % self.save_freq == 0:
                     self.checkpoint()
                 # TODO Early stopping
                 # TODO ReduceLR on plateau?
+                lr_decreased = self.decrease_lr(epoch, train_metrics, val_metrics)
+                lr_list.append(self.current_lr)
+
                 if self.logging:
                     self.log(timestamp=time.time()-since)
                     self.log_epoch(epoch)
-            # train loss, train acc1, val loss, val acc1
+
+                if self.early_stop(epoch, train_metrics, val_metrics, lr_decreased):
+                    break
+
+            # train loss, train acc1, val loss, val acc1, lr_list
             return list(map(itemgetter(0), train_metrics)), \
                    list(map(itemgetter(1), train_metrics)), \
                    list(map(itemgetter(0), val_metrics)), \
-                   list(map(itemgetter(1), val_metrics))
-
+                   list(map(itemgetter(1), val_metrics)), \
+                   lr_list
 
         except KeyboardInterrupt:
             printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')

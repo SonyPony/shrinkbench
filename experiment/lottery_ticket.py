@@ -2,6 +2,7 @@ import json
 import wandb
 import itertools
 
+from typing import List, Tuple
 from operator import itemgetter
 from typing import Dict
 from math import log
@@ -31,7 +32,8 @@ class LotteryTicketExperiment(PruningExperiment):
                  warmup_iterations=0,
                  rewinding_it=0,
                  pruning_rate=0.15,
-                 logging=True):
+                 logging=True,
+                 lr_factor=0.2):
 
         super().__init__(
             dataset=dataset,
@@ -59,10 +61,13 @@ class LotteryTicketExperiment(PruningExperiment):
         self.strategy = strategy
         self.train_metrics_list = list()
         self.pruning_levels_list = list()
+        self.lr_factor = lr_factor
+        self.lr_decreased_count = 0
 
         self.add_params(pruning_rate=pruning_rate)
         self.add_params(rewinding_it=rewinding_it)
         self.add_params(compression=compression)
+        self.add_params(lr_factor=lr_factor)
 
     def init_logger(self, **config):
         wandb.init(project='knn-pruning', entity='sonypony', config=config)
@@ -74,6 +79,7 @@ class LotteryTicketExperiment(PruningExperiment):
         train_accs = list(map(itemgetter(1), self.train_metrics_list))
         val_accs = list(map(itemgetter(3), self.train_metrics_list))
         pruning_keys = itertools.product(self.pruning_levels_list, ["train", "val"])
+        lr_list = list(map(itemgetter(4), self.train_metrics_list))
 
         wandb.log({"pruning_training_course": wandb.plot.line_series(
             xs=[e * len(self.train_dl)
@@ -84,6 +90,45 @@ class LotteryTicketExperiment(PruningExperiment):
             keys=["p% = {:.2f} - {}".format(*x) for x in pruning_keys]
         )})
 
+        wandb.log({"pruning_lr_course": wandb.plot.line_series(
+            xs=[e * len(self.train_dl)
+                for e in range(self.params["train_kwargs"]["epochs"])],
+            ys=lr_list,
+            xname="Iteration",
+            title="LR During Training",
+            keys=["p% = {:.4f}".format(x) for x in self.pruning_levels_list]
+        )})
+
+    def early_stop(self, epoch, train_metrics, val_metrics, lr_decreased) -> bool:
+        """self.lr_decreased_count += lr_decreased
+
+                if self.lr_decreased_count >= 3:
+                    printc("Early stop", color="RED")
+                    return True
+                return False"""
+
+        return False
+
+    # TODO link to repo
+    def decrease_lr(self, epoch: int, train_metrics: List[Tuple[float]], val_metrics: List[Tuple[float]]) -> bool:
+        val_accs = list(map(itemgetter(1), val_metrics))
+
+        if len(val_accs) <= 10 or self.lr_decreased_count >= 2:
+            return False
+
+        # validation did not improve (at all or at least by 0.2% absolute)
+        # after 3 epochs
+        min_acc_last_three_epochs = min(val_accs[-3:])
+        last_val_acc = val_accs[-1]
+
+        if last_val_acc < min_acc_last_three_epochs or \
+                abs(last_val_acc - min_acc_last_three_epochs) < 0.002:
+            self.current_lr = self.current_lr * self.lr_factor
+            printc("Decrease lr to:", self.current_lr, color="GREEN")
+            self.lr_decreased_count += 1
+            return True
+        return False
+
     def pruning_iteration_run(self, target_compression_level: float):
         if target_compression_level != 1.:
             # prune
@@ -93,6 +138,7 @@ class LotteryTicketExperiment(PruningExperiment):
 
         self.freeze()
         self.to_device()
+        self.lr_decreased_count = 0
 
         printc("{}\n\nCurrent p% level: {}".format("-" * 50, 1 / target_compression_level), color="YELLOW")
 
@@ -115,7 +161,7 @@ class LotteryTicketExperiment(PruningExperiment):
             test_acc_5=metrics.get("test_acc5"),
             p_perc=1 / target_compression_level,
             flops=metrics.get("flops_nz"),
-            theoretical_speedup=metrics.get("theoretical_speedup"),
+            theoretical_speedup=metrics.get("theoretical_speedup")
         )
 
     def run(self):
@@ -147,5 +193,6 @@ class LotteryTicketExperiment(PruningExperiment):
             "warmup_iterations": self.params["warmup_iterations"],
             "rewind_iteration": self.params["rewinding_it"],
             "pruning_rate": self.params["pruning_rate"],
-            "strategy": self.params["strategy"]
+            "strategy": self.params["strategy"],
+            "lr_factor": self.lr_factor
         }
