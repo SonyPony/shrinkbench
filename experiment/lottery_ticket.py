@@ -87,7 +87,7 @@ class LotteryTicketExperiment(PruningExperiment):
             ys=list(itertools.chain(*zip(train_accs, val_accs))), # interlace runs - [tr, val, tr, val, ...]
             xname="Iteration",
             title="Accuracy During Training",
-            keys=["p% = {:.2f} - {}".format(*x) for x in pruning_keys]
+            keys=["p% = {:.4f} - {}".format(*x) for x in pruning_keys]
         )})
 
         wandb.log({"pruning_lr_course": wandb.plot.line_series(
