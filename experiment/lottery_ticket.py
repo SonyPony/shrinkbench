@@ -87,7 +87,7 @@ class LotteryTicketExperiment(PruningExperiment):
             ys=list(itertools.chain(*zip(train_accs, val_accs))), # interlace runs - [tr, val, tr, val, ...]
             xname="Iteration",
             title="Accuracy During Training",
-            keys=["p% = {:.4f} - {}".format(*x) for x in pruning_keys]
+            keys=["p% = {:.3f} - {}".format(*x) for x in pruning_keys]
         )})
 
         wandb.log({"pruning_lr_course": wandb.plot.line_series(
@@ -96,7 +96,7 @@ class LotteryTicketExperiment(PruningExperiment):
             ys=lr_list,
             xname="Iteration",
             title="LR During Training",
-            keys=["p% = {:.4f}".format(x) for x in self.pruning_levels_list]
+            keys=["p% = {:.3f}".format(x) for x in self.pruning_levels_list]
         )})
 
     def early_stop(self, epoch, train_metrics, val_metrics, lr_decreased) -> bool:
