@@ -1,4 +1,6 @@
 import json
+from copy import deepcopy
+
 import wandb
 import itertools
 
@@ -129,11 +131,11 @@ class LotteryTicketExperiment(PruningExperiment):
             return True
         return False
 
-    def pruning_iteration_run(self, target_compression_level: float):
-        if target_compression_level != 1.:
+    def pruning_iteration_run(self, target_compression_level: float, init_weights=None):
+        if target_compression_level != 1. and not init_weights is None:
             # prune
             pruning_masks = self.pruning_masks(self.strategy, compression=target_compression_level)
-            self.model.load_state_dict(self.k_iteration_params)
+            self.model.load_state_dict(init_weights)
             self.apply_pruning_masks(masks=pruning_masks)
 
         self.freeze()
@@ -173,10 +175,14 @@ class LotteryTicketExperiment(PruningExperiment):
         pruning_iterations = round(log(target_pruning_ratio_inv, 1 - self.pruning_rate) - 1)
 
         self.pruning_iteration_run(target_compression_level=1.)
+        init_weights = deepcopy(self.k_iteration_params)
 
         for i in range(pruning_iterations):
             target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
-            self.pruning_iteration_run(target_compression_level=target_compression_level)
+            self.pruning_iteration_run(
+                target_compression_level=target_compression_level,
+                init_weights=init_weights
+            )
         self.log_end_summary()
 
     def summary_params(self) -> Dict:
