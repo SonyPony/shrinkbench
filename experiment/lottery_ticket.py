@@ -35,7 +35,8 @@ class LotteryTicketExperiment(PruningExperiment):
                  rewinding_it=0,
                  pruning_rate=0.15,
                  logging=True,
-                 lr_factor=0.2):
+                 lr_factor=0.2,
+                 linear_pruning=False):
 
         super().__init__(
             dataset=dataset,
@@ -65,13 +66,16 @@ class LotteryTicketExperiment(PruningExperiment):
         self.pruning_levels_list = list()
         self.lr_factor = lr_factor
         self.lr_decreased_count = 0
+        self.linear_pruning = linear_pruning
 
         self.add_params(pruning_rate=pruning_rate)
         self.add_params(rewinding_it=rewinding_it)
         self.add_params(compression=compression)
         self.add_params(lr_factor=lr_factor)
+        self.add_params(linear_pruning=linear_pruning)
 
-    def init_logger(self, **config):
+    @staticmethod
+    def init_logger(**config):
         wandb.init(project='knn-pruning', entity='sonypony', config=config)
 
     def log(self, **kwargs):
@@ -167,18 +171,28 @@ class LotteryTicketExperiment(PruningExperiment):
         )
 
     def run(self):
-        self.init_logger(**self.summary_params())
+        LotteryTicketExperiment.init_logger(**self.summary_params())
 
         printc(f"Running {repr(self)}", color='YELLOW')
 
         target_pruning_ratio_inv = 1 / self.compression
-        pruning_iterations = round(log(target_pruning_ratio_inv, 1 - self.pruning_rate) - 1)
+
+        # select pruning function
+        if self.linear_pruning:
+            pruning_iterations = round(1 / self.pruning_rate)
+            descend_slope = (1 - target_pruning_ratio_inv) / pruning_iterations
+        else:
+            pruning_iterations = round(log(target_pruning_ratio_inv, 1 - self.pruning_rate) - 1)
 
         self.pruning_iteration_run(target_compression_level=1.)
         init_weights = deepcopy(self.k_iteration_params)
 
         for i in range(pruning_iterations):
-            target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
+            if self.linear_pruning:
+                target_compression_level = 1 / (-descend_slope * (i + 1) + 1)
+            else:
+                target_compression_level = 1 / (1 - self.pruning_rate) ** (i + 1)
+
             self.pruning_iteration_run(
                 target_compression_level=target_compression_level,
                 init_weights=init_weights
@@ -200,5 +214,6 @@ class LotteryTicketExperiment(PruningExperiment):
             "rewind_iteration": self.params["rewinding_it"],
             "pruning_rate": self.params["pruning_rate"],
             "strategy": self.params["strategy"],
-            "lr_factor": self.lr_factor
+            "lr_factor": self.lr_factor,
+            "linear_pruning": self.linear_pruning
         }
