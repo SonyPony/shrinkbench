@@ -1,3 +1,10 @@
+# Authors: Son Hai Nguyen, Miroslav Karpíšek
+# Logins: xnguye16, xkarpi05
+# Project: Neural network pruning
+# Course: Convolutional Neural Networks
+# Year: 2021
+
+
 import json
 from copy import deepcopy
 
@@ -9,9 +16,6 @@ from operator import itemgetter
 from typing import Dict
 from math import log
 from .prune import PruningExperiment
-
-from .. import strategies
-from ..metrics import model_size, flops
 from ..util import printc
 
 
@@ -115,7 +119,6 @@ class LotteryTicketExperiment(PruningExperiment):
 
         return False
 
-    # TODO link to repo
     def decrease_lr(self, epoch: int, train_metrics: List[Tuple[float]], val_metrics: List[Tuple[float]]) -> bool:
         val_accs = list(map(itemgetter(1), val_metrics))
 

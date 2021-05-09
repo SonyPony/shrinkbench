@@ -1,6 +1,12 @@
+# Authors: Son Hai Nguyen, Miroslav Karpíšek
+# Logins: xnguye16, xkarpi05
+# Project: Neural network pruning
+# Course: Convolutional Neural Networks
+# Year: 2021
+
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class ConvRelu(nn.Module):
